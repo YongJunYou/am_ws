@@ -1,0 +1,184 @@
+<?xml version="1.0"?>
+<robot name="mani" xmlns:xacro="http://www.ros.org/wiki/xacro">
+
+
+    <!-- Color -->
+    <material name="sky_blue">
+        <color rgba="0.53 0.81 0.92 1"/>
+    </material>
+    <material name="red">
+        <color rgba="1 0 0 1"/>
+    </material>
+    <material name="green">
+        <color rgba="0 1 0 1"/>
+    </material>
+    <material name="gray">
+        <color rgba="0.5 0.5 0.5 1"/>
+    </material>
+    <material name="silver">
+        <color rgba="0.75 0.75 0.75 1"/>
+    </material>
+
+    <!-- base_link  -->
+<link name="base_link">
+  <inertial>
+    <origin xyz="-0.011647649438883093 -0.00048239768523579765 -0.0011682250103256563" rpy="0 0 0"/>
+    <mass value="0.09172816180539987"/>
+    <inertia ixx="1.7e-05" iyy="2.4e-05" izz="2.6e-05" ixy="-0.0" iyz="0.0" ixz="-0.0"/>
+  </inertial>
+  <visual>
+    <origin xyz="0 0 0" rpy="0 0 0"/>
+    <geometry>
+      <mesh filename="package://mani_urdf/meshes/mani/base_link.stl" scale="0.001 0.001 0.001"/>
+    </geometry>
+    <material name="silver"/>
+  </visual>
+  <collision>
+    <origin xyz="0 0 0" rpy="0 0 0"/>
+    <geometry>
+      <mesh filename="package://mani_urdf/meshes/mani/base_link.stl" scale="0.001 0.001 0.001"/>
+    </geometry>
+  </collision>
+</link>
+
+<link name="link1_1">
+  <inertial>
+    <origin xyz="5.4085382359644335e-14 0.020499999999979507 0.043000000000165024" rpy="0 0 0"/>
+    <mass value="0.033000215200095356"/>
+    <inertia ixx="1.4e-05" iyy="1.1e-05" izz="6e-06" ixy="-0.0" iyz="0.0" ixz="0.0"/>
+  </inertial>
+  <visual>
+    <origin xyz="-0.0 0.0205 -0.0" rpy="0 0 0"/>
+    <geometry>
+      <mesh filename="package://mani_urdf/meshes/mani/link1_1.stl" scale="0.001 0.001 0.001"/>
+    </geometry>
+    <material name="silver"/>
+  </visual>
+  <collision>
+    <origin xyz="-0.0 0.0205 -0.0" rpy="0 0 0"/>
+    <geometry>
+      <mesh filename="package://mani_urdf/meshes/mani/link1_1.stl" scale="0.001 0.001 0.001"/>
+    </geometry>
+  </collision>
+</link>
+
+<link name="link2_1">
+  <inertial>
+    <origin xyz="0.0006314929630786327 -0.018368609680172048 0.011999832944530234" rpy="0 0 0"/>
+    <mass value="0.10199970916257842"/>
+    <inertia ixx="2.8e-05" iyy="2.8e-05" izz="2e-05" ixy="1e-06" iyz="0.0" ixz="-0.0"/>
+  </inertial>
+  <visual>
+    <origin xyz="-0.0 -0.019 -0.086" rpy="0 0 0"/>
+    <geometry>
+      <mesh filename="package://mani_urdf/meshes/mani/link2_1.stl" scale="0.001 0.001 0.001"/>
+    </geometry>
+    <material name="silver"/>
+  </visual>
+  <collision>
+    <origin xyz="-0.0 -0.019 -0.086" rpy="0 0 0"/>
+    <geometry>
+      <mesh filename="package://mani_urdf/meshes/mani/link2_1.stl" scale="0.001 0.001 0.001"/>
+    </geometry>
+  </collision>
+</link>
+
+<link name="link3_1">
+  <inertial>
+    <origin xyz="-0.019000000000020462 -5.3987030398996446e-14 0.04299999999983527" rpy="0 0 0"/>
+    <mass value="0.03300021520009532"/>
+    <inertia ixx="1.1e-05" iyy="1.4e-05" izz="6e-06" ixy="0.0" iyz="-0.0" ixz="-0.0"/>
+  </inertial>
+  <visual>
+    <origin xyz="-0.019 0.0 -0.11" rpy="0 0 0"/>
+    <geometry>
+      <mesh filename="package://mani_urdf/meshes/mani/link3_1.stl" scale="0.001 0.001 0.001"/>
+    </geometry>
+    <material name="silver"/>
+  </visual>
+  <collision>
+    <origin xyz="-0.019 0.0 -0.11" rpy="0 0 0"/>
+    <geometry>
+      <mesh filename="package://mani_urdf/meshes/mani/link3_1.stl" scale="0.001 0.001 0.001"/>
+    </geometry>
+  </collision>
+</link>
+
+<link name="link4_1">
+  <inertial>
+    <origin xyz="-0.018368507464034477 -0.0006313903232927855 0.012000165844984312" rpy="0 0 0"/>
+    <mass value="0.10199970647517996"/>
+    <inertia ixx="2.8e-05" iyy="2.8e-05" izz="2e-05" ixy="-1e-06" iyz="0.0" ixz="0.0"/>
+  </inertial>
+  <visual>
+    <origin xyz="-0.019 -0.0 -0.196" rpy="0 0 0"/>
+    <geometry>
+      <mesh filename="package://mani_urdf/meshes/mani/link4_1.stl" scale="0.001 0.001 0.001"/>
+    </geometry>
+    <material name="silver"/>
+  </visual>
+  <collision>
+    <origin xyz="-0.019 -0.0 -0.196" rpy="0 0 0"/>
+    <geometry>
+      <mesh filename="package://mani_urdf/meshes/mani/link4_1.stl" scale="0.001 0.001 0.001"/>
+    </geometry>
+  </collision>
+</link>
+
+<link name="link5_1">
+  <inertial>
+    <origin xyz="7.61979708561022e-14 0.019000000000033313 0.03834657445375009" rpy="0 0 0"/>
+    <mass value="0.02739554319054945"/>
+    <inertia ixx="9e-06" iyy="6e-06" izz="4e-06" ixy="0.0" iyz="0.0" ixz="-0.0"/>
+  </inertial>
+  <visual>
+    <origin xyz="-0.0 0.019 -0.22" rpy="0 0 0"/>
+    <geometry>
+      <mesh filename="package://mani_urdf/meshes/mani/link5_1.stl" scale="0.001 0.001 0.001"/>
+    </geometry>
+    <material name="silver"/>
+  </visual>
+  <collision>
+    <origin xyz="-0.0 0.019 -0.22" rpy="0 0 0"/>
+    <geometry>
+      <mesh filename="package://mani_urdf/meshes/mani/link5_1.stl" scale="0.001 0.001 0.001"/>
+    </geometry>
+  </collision>
+</link>
+
+<joint name="joint_1" type="continuous">
+  <origin xyz="0.0 -0.0205 0.0" rpy="0 0 0"/>
+  <parent link="base_link"/>
+  <child link="link1_1"/>
+  <axis xyz="-0.0 1.0 -0.0"/>
+</joint>
+
+<joint name="joint_2" type="continuous">
+  <origin xyz="0.0 0.0395 0.086" rpy="0 0 0"/>
+  <parent link="link1_1"/>
+  <child link="link2_1"/>
+  <axis xyz="0.0 1.0 0.0"/>
+</joint>
+
+<joint name="joint_3" type="continuous">
+  <origin xyz="0.019 -0.019 0.024" rpy="0 0 0"/>
+  <parent link="link2_1"/>
+  <child link="link3_1"/>
+  <axis xyz="1.0 -0.0 -0.0"/>
+</joint>
+
+<joint name="joint_4" type="continuous">
+  <origin xyz="0.0 0.0 0.086" rpy="0 0 0"/>
+  <parent link="link3_1"/>
+  <child link="link4_1"/>
+  <axis xyz="1.0 -0.0 -0.0"/>
+</joint>
+
+<joint name="joint_5" type="continuous">
+  <origin xyz="-0.019 -0.019 0.024" rpy="0 0 0"/>
+  <parent link="link4_1"/>
+  <child link="link5_1"/>
+  <axis xyz="-0.0 -1.0 -0.0"/>
+</joint>
+
+</robot>
