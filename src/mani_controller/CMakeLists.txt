@@ -38,7 +38,7 @@ include_directories(
 #-------------------------------#
 add_library(mani_controller_lib
   src/dynamixel_sdk_interface.cpp
-  src/pid_controller.cpp
+  src/gravitational_moment_calculator.cpp
   src/mani.cpp
 )
 

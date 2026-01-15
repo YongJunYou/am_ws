@@ -1,7 +1,8 @@
 #include "mani_controller/dynamixel_sdk_interface.hpp"
 
-#include <stdexcept>
 #include <algorithm>  // std::clamp
+#include <stdexcept>
+#include <vector>
 
 DynamixelSdkInterface::DynamixelSdkInterface(
     const std::string &port,
@@ -90,17 +91,6 @@ void DynamixelSdkInterface::initMotors()
       RCLCPP_WARN(logger_, "Torque OFF error (ID=%d): %s",
                   id, packet_handler_->getRxPacketError(dxl_error));
     }
-  }
-  // TYPE A: operating mode
-  for (auto id : type_a_ids_) {
-    packet_handler_->write1ByteTxRx(
-        port_handler_, id, addr_operating_mode_, mode_a_, &dxl_error);
-  }
-
-  // TYPE B: operating mode
-  for (auto id : type_b_ids_) {
-    packet_handler_->write1ByteTxRx(
-        port_handler_, id, addr_operating_mode_, mode_b_, &dxl_error);
   }
 }
 

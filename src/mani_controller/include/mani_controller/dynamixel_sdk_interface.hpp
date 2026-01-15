@@ -33,7 +33,8 @@ public:
     std::vector<int16_t> current;   // PRESENT_CURRENT  (16bit signed)
   };
 
-  explicit DynamixelSdkInterface
+  //생성자
+  DynamixelSdkInterface
   (
     const std::string &port,
     int baudrate,
@@ -41,11 +42,11 @@ public:
     const std::vector<uint8_t> &dxl_ids,
     int control_mode
   );
-
+  //소멸자
   ~DynamixelSdkInterface();
-
+  
+  //함수
   bool readOnce(State &out_state);
-
   bool writeGoalPositions(const std::vector<int32_t> &goals_unit);
   bool writeGoalPositionsDeg(const std::vector<double> &goals_deg);
 

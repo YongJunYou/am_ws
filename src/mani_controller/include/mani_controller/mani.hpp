@@ -10,7 +10,7 @@
 #include <mutex>
 
 #include "mani_controller/dynamixel_sdk_interface.hpp"
-#include "mani_controller/pid_controller.hpp"
+#include "mani_controller/gravitational_moment_calculator.hpp"
 
 class RobotArm : public rclcpp::Node
 {
@@ -18,13 +18,12 @@ public:
     RobotArm();
     void run();
 
-private:
     rclcpp::Time last_time_;
 
-    std::optional<DynamixelSdkInterface> dxl_interface_;
+    std::unique_ptr<DynamixelSdkInterface> dxl_interface_;
 
     // PID Controller
-    PidController pid_controller_;
+    std::unique_ptr<GravitationalMomentCalculator> gravitational_moment_calculator_;
 
     // ROS2 Publishers
     rclcpp::Publisher<sensor_msgs::msg::JointState>::SharedPtr joint_state_pub_;
@@ -34,11 +33,7 @@ private:
     
     // Desired joint positions (theta)
     Eigen::VectorXd desired_theta_;
-    std::mutex desired_theta_mutex_;
 
-    // 디버그용 헬퍼
-    void debugDynamixelState(const DynamixelSdkInterface::State &state);
-    
     // Topic 발행 함수
     void publishJointState(const DynamixelSdkInterface::State &state);
     

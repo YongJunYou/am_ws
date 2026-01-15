@@ -1,21 +1,25 @@
 {
   "configurations": [
     {
-      "browse": {
-        "databaseFilename": "${default}",
-        "limitSymbolsToIncludedHeaders": false
-      },
+      "name": "ROS",
       "includePath": [
+        "${workspaceFolder}/**",
         "/home/yyj/am_ws/install/mani_controller/include/**",
         "/opt/ros/humble/include/**",
-        "/home/yyj/am_ws/src/mani_controller/include/**",
         "/usr/include/**"
       ],
-      "name": "ROS",
-      "intelliSenseMode": "gcc-x64",
-      "compilerPath": "/usr/bin/gcc",
-      "cStandard": "gnu11",
-      "cppStandard": "c++14"
+      "defines": [],
+      "compilerPath": "/usr/bin/g++", // gcc에서 g++로 변경
+      "cStandard": "gnu17",
+      "cppStandard": "c++20", // std::numbers 사용을 위해 c++20 유지
+      "intelliSenseMode": "linux-gcc-x64", // 리눅스 환경에 맞게 변경
+      "browse": {
+        "path": [
+          "${workspaceFolder}",
+          "/opt/ros/humble/include"
+        ],
+        "limitSymbolsToIncludedHeaders": true
+      }
     }
   ],
   "version": 4

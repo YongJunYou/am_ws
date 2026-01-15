@@ -19,6 +19,9 @@ RobotArm::RobotArm()
     int baudrate                        = this->get_parameter("baudrate").as_int();
     int control_mode                    = this->get_parameter("control_mode").as_int();
     
+    // 관절 개수 가져오기
+    const size_t n_joints = dxl_ids_param.size();
+
     // int64_t를 uint8_t로 변환
     std::vector<uint8_t> dxl_ids;
     dxl_ids.reserve(dxl_ids_param.size());
@@ -30,11 +33,12 @@ RobotArm::RobotArm()
         dxl_ids.push_back(static_cast<uint8_t>(id));
     }
 
-    // DynamixelSdkInterface를 파라미터 값으로 초기화
-    dxl_interface_.emplace(port, baudrate, protocol_version, dxl_ids, control_mode);
+    // Desired theta 초기화 (관절 개수에 맞춤)
+    desired_theta_ = Eigen::VectorXd::Zero(static_cast<int>(n_joints));
 
-    // 관절 개수 가져오기
-    const size_t n_joints = dxl_->jointIds().size();
+    // DynamixelSdkInterface / pid 제어기를 파라미터 값으로 초기화
+    dxl_interface_ = std::make_unique<DynamixelSdkInterface>(port, baudrate, protocol_version, dxl_ids, control_mode);
+    gravitational_moment_calculator_ = std::make_unique<GravitationalMomentCalculator>();
 
     // ROS2 Publisher 초기화
     joint_state_pub_ = this->create_publisher<sensor_msgs::msg::JointState>(
@@ -45,11 +49,8 @@ RobotArm::RobotArm()
         "desired_theta", 10,
         std::bind(&RobotArm::desiredThetaCallback, this, std::placeholders::_1));
 
-    // Desired theta 초기화 (동적으로 관절 개수에 맞춤)
-    desired_theta_ = Eigen::VectorXd::Zero(static_cast<int>(n_joints));
-
-    RCLCPP_INFO(this->get_logger(), "0421604RobotArm created.");
-    RCLCPP_INFO(this->get_logger(), "Dynamixel device: %s @ %d baud", device_name.c_str(), baudrate);
+    RCLCPP_INFO(this->get_logger(), "RobotArm created.");
+    RCLCPP_INFO(this->get_logger(), "port: %s @ baud: %d", port.c_str(), baudrate);
     RCLCPP_INFO(this->get_logger(), "Publishing joint states to topic: joint_states");
     RCLCPP_INFO(this->get_logger(), "Subscribing to desired theta from topic: desired_theta");
 }
@@ -76,7 +77,7 @@ void RobotArm::run()
         }
 
         // 1. state 읽기
-        if (!dxl_.has_value() || !dxl_->readOnce(dxl_state))
+        if (!dxl_interface_->readOnce(dxl_state))
         {
             RCLCPP_WARN(this->get_logger(), "Failed to read Dynamixel state");
             continue;
@@ -121,52 +122,6 @@ void RobotArm::run()
         rate.sleep();  // 여기서 다음 주기까지 블록
     }
 }
-
-void RobotArm::debugDynamixelState(const DynamixelSdkInterface::State &state)
-{
-    const std::size_t n = state.position.size();
-    if (n == 0) return;
-
-    const double UNIT2DEG = DynamixelSdkInterface::UNIT2DEG;
-    
-    // Position (deg)
-    Eigen::VectorXd q_deg(static_cast<int>(n));
-    for (std::size_t i = 0; i < n; ++i)
-    {
-        q_deg(static_cast<int>(i)) =
-            static_cast<double>(state.position[i]) * UNIT2DEG;
-    }
-
-    // Velocity (raw units, typically 0.229 rev/min per unit for XM/XC series)
-    Eigen::VectorXd v_raw(static_cast<int>(n));
-    for (std::size_t i = 0; i < n; ++i)
-    {
-        v_raw(static_cast<int>(i)) = static_cast<double>(state.velocity[i]);
-    }
-
-    // Current (raw units, typically 2.69 mA per unit for XM430, 1.0 mA per unit for XC330)
-    Eigen::VectorXd i_raw(static_cast<int>(n));
-    for (std::size_t i = 0; i < n; ++i)
-    {
-        i_raw(static_cast<int>(i)) = static_cast<double>(state.current[i]);
-    }
-
-    // 출력
-    std::stringstream ss_pos, ss_vel, ss_cur;
-    ss_pos << q_deg.transpose();
-    ss_vel << v_raw.transpose();
-    ss_cur << i_raw.transpose();
-
-    RCLCPP_INFO_THROTTLE(
-        this->get_logger(),
-        *this->get_clock(),
-        5,  // 5ms (0.5초마다 출력)
-        "Dynamixel State - Position [deg]: %s | Velocity [raw]: %s | Current [raw]: %s",
-        ss_pos.str().c_str(),
-        ss_vel.str().c_str(),
-        ss_cur.str().c_str());
-}
-
 
 void RobotArm::publishJointState(const DynamixelSdkInterface::State &state)
 {
@@ -214,8 +169,6 @@ void RobotArm::desiredThetaCallback(const std_msgs::msg::Float64MultiArray::Shar
         RCLCPP_WARN(this->get_logger(), "Received empty desired theta message");
         return;
     }
-
-    std::lock_guard<std::mutex> lock(desired_theta_mutex_);
     desired_theta_.resize(msg->data.size());
     for (size_t i = 0; i < msg->data.size(); ++i) {
         desired_theta_(i) = msg->data[i];
