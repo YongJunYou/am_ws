@@ -10,15 +10,30 @@ RobotArm::RobotArm()
     this->declare_parameter<int>("baudrate");
     this->declare_parameter<double>("protocol_version");
     this->declare_parameter<std::vector<int64_t>>("dxl_ids");
-    this->declare_parameter<int>("control_mode");
+    this->declare_parameter<int>("operating_mode");
+    this->declare_parameter<std::string>("profile");
+    this->declare_parameter<double>("profile_velocity");
+    this->declare_parameter<double>("profile_acceleration");
 
-    // config에서 받아와서 파라미터 파라미터 저장
+    //실험용 파라미터
+    this->declare_parameter<std::vector<double>>("start_and_end_position");
+    this->declare_parameter<double>("decrement_per_second");
+
+    // config에서 받아와서 파라미터 저장
     std::string port                    = this->get_parameter("port").as_string();
     std::vector<int64_t> dxl_ids_param  = this->get_parameter("dxl_ids").as_integer_array();
     double protocol_version             = this->get_parameter("protocol_version").as_double();
     int baudrate                        = this->get_parameter("baudrate").as_int();
-    int control_mode                    = this->get_parameter("control_mode").as_int();
-    
+    int operating_mode                  = this->get_parameter("operating_mode").as_int();
+    std::string profile                 = this->get_parameter("profile").as_string();
+    double profile_velocity             = this->get_parameter("profile_velocity").as_double();
+    double profile_acceleration         = this->get_parameter("profile_acceleration").as_double();
+
+    //실험용 파라미터
+    start_and_end_position_ = this->get_parameter("start_and_end_position").as_double_array();
+    decrement_per_second_ = this->get_parameter("decrement_per_second").as_double();
+    current_goal_unit_ = start_and_end_position_[0]; //시작 위치로 초기화
+
     // 관절 개수 가져오기
     const size_t n_joints = dxl_ids_param.size();
 
@@ -37,17 +52,20 @@ RobotArm::RobotArm()
     desired_theta_ = Eigen::VectorXd::Zero(static_cast<int>(n_joints));
 
     // DynamixelSdkInterface / pid 제어기를 파라미터 값으로 초기화
-    dxl_interface_ = std::make_unique<DynamixelSdkInterface>(port, baudrate, protocol_version, dxl_ids, control_mode);
+    dxl_interface_ = std::make_unique<DynamixelSdkInterface>(port, baudrate, protocol_version, dxl_ids, operating_mode, profile, profile_velocity, profile_acceleration);
     gravitational_moment_calculator_ = std::make_unique<GravitationalMomentCalculator>();
 
     // ROS2 Publisher 초기화
-    joint_state_pub_ = this->create_publisher<sensor_msgs::msg::JointState>(
+    joint_states_pub_ = this->create_publisher<sensor_msgs::msg::JointState>(
         "joint_states", 10);
 
-    // ROS2 Subscriber 초기화
-    desired_theta_sub_ = this->create_subscription<std_msgs::msg::Float64MultiArray>(
-        "desired_theta", 10,
-        std::bind(&RobotArm::desiredThetaCallback, this, std::placeholders::_1));
+    position_errors_pub_ = this->create_publisher<sensor_msgs::msg::JointState>(
+        "position_errors", 10);
+
+    // // ROS2 Subscriber 초기화
+    // desired_theta_sub_ = this->create_subscription<std_msgs::msg::Float64MultiArray>(
+    //     "desired_theta", 10,
+    //     std::bind(&RobotArm::desiredThetaCallback, this, std::placeholders::_1));
 
     RCLCPP_INFO(this->get_logger(), "RobotArm created.");
     RCLCPP_INFO(this->get_logger(), "port: %s @ baud: %d", port.c_str(), baudrate);
@@ -63,7 +81,7 @@ void RobotArm::run()
     const double control_period = 0.005;  // 5ms
     rclcpp::Rate rate(1.0 / control_period);  // 200 Hz
 
-    DynamixelSdkInterface::State dxl_state;
+    DynamixelSdkInterface::States dxl_states;
 
     while (rclcpp::ok())
     {
@@ -77,15 +95,112 @@ void RobotArm::run()
         }
 
         // 1. state 읽기
-        if (!dxl_interface_->readOnce(dxl_state))
+        if (!dxl_interface_->readOnce(dxl_states))
         {
             RCLCPP_WARN(this->get_logger(), "Failed to read Dynamixel state");
             continue;
         }
             // ROS2 topic으로 발행
-        publishJointState(dxl_state);
+        publishJointState(dxl_states);
+        publishPositionError(dxl_states); //error theta 
+
+        // 2. state 가져오기
+        std::vector<int32_t> goal_units = dxl_states.positions; 
+
+        // 3. 2번째 모터(Index 1)에 대해서만 업데이트
+        if (dxl_states.positions[1] > start_and_end_position_[1]) {
+            current_goal_unit_ -= (decrement_per_second_ * dt);
+        }
+
+        // 벡터의 2번째 칸만 업데이트
+        if (goal_units.size() >= 2) {
+            goal_units[1] = static_cast<int32_t>(std::round(current_goal_unit_));
+        }
+
+        if (!dxl_interface_->writeGoalPositions(goal_units)) {
+            RCLCPP_WARN_THROTTLE(this->get_logger(), *this->get_clock(), 1000, "Write failed");
+        }
+
         
-        
+        rate.sleep();  // 여기서 다음 주기까지 블록
+    }
+}
+
+void RobotArm::publishJointState(const DynamixelSdkInterface::States &states)
+{
+    if (!joint_states_pub_) return;
+
+    auto msg = sensor_msgs::msg::JointState();
+    msg.header.stamp = this->now();
+    
+    const std::size_t n = states.positions.size();
+    if (n == 0) return;
+
+    // Joint names
+    msg.name.resize(n);
+    for (std::size_t i = 0; i < n; ++i) {
+        msg.name[i] = "joint_" + std::to_string(i + 1);
+    }
+
+    // Position (radian)
+    msg.position.resize(n);
+    for (std::size_t i = 0; i < n; ++i) {
+        msg.position[i] = static_cast<double>(states.positions[i]) * DynamixelSdkInterface::UNIT2RAD;
+    }
+
+    // Velocity (rad/s)
+    msg.velocity.resize(n);
+    for (std::size_t i = 0; i < n; ++i) {
+        msg.velocity[i] = static_cast<double>(states.velocities[i]) * DynamixelSdkInterface::UNIT2RADPERSEC;
+    }
+
+    // Load (%)
+    msg.effort.resize(n);
+    for (std::size_t i = 0; i < n && i < states.loads.size(); ++i) {
+        msg.effort[i] = static_cast<double>(states.loads[i]) * DynamixelSdkInterface::UNIT2PERCENT;
+    }
+
+    joint_states_pub_->publish(msg);
+}
+
+void RobotArm::publishPositionError(const DynamixelSdkInterface::States &states)
+{
+    if (!position_errors_pub_) return;
+
+    auto msg = sensor_msgs::msg::JointState();
+    msg.header.stamp = this->now();
+    
+    const std::size_t n = states.goal_positions.size();
+    if (n == 0) return;
+
+    // Joint names
+    msg.name.resize(n);
+    for (std::size_t i = 0; i < n; ++i) {
+        msg.name[i] = "joint_" + std::to_string(i + 1);
+    }
+
+    // Position (radian)
+    msg.position.resize(n);
+    for (std::size_t i = 0; i < n; ++i) {
+        msg.position[i] = static_cast<double>(states.goal_positions[i]) * DynamixelSdkInterface::UNIT2RAD;
+    }
+}
+
+void RobotArm::desiredThetaCallback(const std_msgs::msg::Float64MultiArray::SharedPtr msg)
+{
+    if (!msg || msg->data.empty()) {
+        RCLCPP_WARN(this->get_logger(), "Received empty desired theta message");
+        return;
+    }
+    desired_theta_.resize(msg->data.size());
+    for (size_t i = 0; i < msg->data.size(); ++i) {
+        desired_theta_(i) = msg->data[i];
+    }
+
+    RCLCPP_DEBUG(this->get_logger(), "Received desired theta with %zu joints", msg->data.size());
+}
+
+
         // 3. PID 제어기 업데이트
         // Eigen::VectorXd desired_theta_local;
         // {
@@ -118,62 +233,3 @@ void RobotArm::run()
         //         }
         //     }
         // }
-        
-        rate.sleep();  // 여기서 다음 주기까지 블록
-    }
-}
-
-void RobotArm::publishJointState(const DynamixelSdkInterface::State &state)
-{
-    if (!joint_state_pub_) return;
-
-    auto msg = sensor_msgs::msg::JointState();
-    msg.header.stamp = this->now();
-    
-    const std::size_t n = state.position.size();
-    if (n == 0) return;
-
-    // Joint names
-    msg.name.resize(n);
-    for (std::size_t i = 0; i < n; ++i) {
-        msg.name[i] = "joint_" + std::to_string(i + 1);
-    }
-
-    // Position (radian)
-    msg.position.resize(n);
-    for (std::size_t i = 0; i < n; ++i) {
-        msg.position[i] = static_cast<double>(state.position[i]) * 
-                          DynamixelSdkInterface::UNIT2RAD;
-    }
-
-    // Velocity (rad/s)
-    msg.velocity.resize(n);
-    for (std::size_t i = 0; i < n; ++i) {
-        msg.velocity[i] = static_cast<double>(state.velocity[i]) * 
-                          DynamixelSdkInterface::UNIT2RADPERSEC;
-    }
-
-    msg.effort.resize(n);
-    for (std::size_t i = 0; i < n && i < state.current.size(); ++i) {
-        // Current를 토크로 변환 (간단한 근사값, 실제로는 모터 스펙에 따라 다름)
-        const double current_amp = static_cast<double>(state.current[i]) * 0.00269; // 예시 값
-        msg.effort[i] = current_amp * 0.1; // 예시 변환 계수 (실제 값으로 교체 필요)
-    }
-
-    joint_state_pub_->publish(msg);
-}
-
-void RobotArm::desiredThetaCallback(const std_msgs::msg::Float64MultiArray::SharedPtr msg)
-{
-    if (!msg || msg->data.empty()) {
-        RCLCPP_WARN(this->get_logger(), "Received empty desired theta message");
-        return;
-    }
-    desired_theta_.resize(msg->data.size());
-    for (size_t i = 0; i < msg->data.size(); ++i) {
-        desired_theta_(i) = msg->data[i];
-    }
-
-    RCLCPP_DEBUG(this->get_logger(), "Received desired theta with %zu joints", msg->data.size());
-}
-

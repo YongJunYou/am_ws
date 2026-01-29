@@ -18,6 +18,10 @@ public:
     RobotArm();
     void run();
 
+    std::vector<double> start_and_end_position_;
+    double decrement_per_second_;
+    double current_goal_unit_;
+
     rclcpp::Time last_time_;
 
     std::unique_ptr<DynamixelSdkInterface> dxl_interface_;
@@ -26,16 +30,18 @@ public:
     std::unique_ptr<GravitationalMomentCalculator> gravitational_moment_calculator_;
 
     // ROS2 Publishers
-    rclcpp::Publisher<sensor_msgs::msg::JointState>::SharedPtr joint_state_pub_;
+    rclcpp::Publisher<sensor_msgs::msg::JointState>::SharedPtr joint_states_pub_;
+    rclcpp::Publisher<sensor_msgs::msg::JointState>::SharedPtr position_errors_pub_;
     
     // ROS2 Subscribers
-    rclcpp::Subscription<std_msgs::msg::Float64MultiArray>::SharedPtr desired_theta_sub_;
+    // rclcpp::Subscription<std_msgs::msg::Float64MultiArray>::SharedPtr desired_theta_sub_;
     
     // Desired joint positions (theta)
     Eigen::VectorXd desired_theta_;
 
     // Topic 발행 함수
-    void publishJointState(const DynamixelSdkInterface::State &state);
+    void publishJointState(const DynamixelSdkInterface::States &states);
+    void publishPositionError(const DynamixelSdkInterface::States &states);
     
     // Subscriber callback
     void desiredThetaCallback(const std_msgs::msg::Float64MultiArray::SharedPtr msg);

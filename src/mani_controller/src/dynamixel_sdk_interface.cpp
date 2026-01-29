@@ -9,34 +9,39 @@ DynamixelSdkInterface::DynamixelSdkInterface(
     int baudrate,
     double protocol_version,
     const std::vector<uint8_t> &dxl_ids,
-    int control_mode
+    int operating_mode,
+    const std::string &profile,
+    double profile_velocity,
+    double profile_acceleration
 ): port_(port),
   baudrate_(baudrate),
   protocol_version_(protocol_version),
   dxl_ids_all_(dxl_ids),
-  control_mode_(control_mode),
+  operating_mode_(operating_mode),
+  profile_(profile),
+  profile_velocity_(profile_velocity),
+  profile_acceleration_(profile_acceleration),
   logger_(rclcpp::get_logger("DynamixelSdkInterface"))
 {
-  // ===== IDs =====
-  
-
   // ===== control table 주소 =====
   addr_torque_enable_        = 64;
+  addr_drive_mode_           = 10;
   addr_operating_mode_       = 11;
   addr_profile_acc_          = 108;
   addr_profile_vel_          = 112;
   addr_goal_position_        = 116;
-  addr_present_current_      = 126;
+  addr_present_load_         = 126; //present_load
   addr_present_velocity_     = 128;
   addr_present_position_     = 132;
 
   // ===== control table 길이 =====
   len_torque_enable_         = 1;
+  len_drive_mode_            = 1;
   len_operating_mode_        = 1;
   len_profile_acc_           = 4;
   len_profile_vel_           = 4;
   len_goal_position_         = 4;
-  len_present_current_       = 2;
+  len_present_load_          = 2; //present_load
   len_present_velocity_      = 4;
   len_present_position_      = 4;
   len_present_all_           = 10;
@@ -80,16 +85,48 @@ void DynamixelSdkInterface::initMotors()
   uint8_t dxl_error = 0;
   int dxl_comm_result = COMM_TX_FAIL;
 
-  // torque off (MATLAB: write1ByteTxRx(..., TORQUE_DISABLE))
+  // torque off 
   for (auto id : dxl_ids_all_) {
-    dxl_comm_result = packet_handler_->write1ByteTxRx(
-        port_handler_, id, addr_torque_enable_, torque_disable_value_, &dxl_error);
+    dxl_comm_result = packet_handler_->write1ByteTxRx(port_handler_, id, addr_torque_enable_, torque_disable_value_, &dxl_error);
     if (dxl_comm_result != COMM_SUCCESS) {
-      RCLCPP_WARN(logger_, "Torque OFF failed (ID=%d): %s",
-                  id, packet_handler_->getTxRxResult(dxl_comm_result));
+      RCLCPP_WARN(logger_, "Torque OFF failed (ID=%d): %s",id, packet_handler_->getTxRxResult(dxl_comm_result));
     } else if (dxl_error != 0) {
-      RCLCPP_WARN(logger_, "Torque OFF error (ID=%d): %s",
-                  id, packet_handler_->getRxPacketError(dxl_error));
+      RCLCPP_WARN(logger_, "Torque OFF error (ID=%d): %s", id, packet_handler_->getRxPacketError(dxl_error));
+    }
+  }
+
+  // set operating_mode_
+  for (auto id : dxl_ids_all_) {
+    dxl_comm_result = packet_handler_->write1ByteTxRx(port_handler_, id, addr_operating_mode_, operating_mode_, &dxl_error);
+  }
+
+  // set profile_
+  if (profile_ == "Step") {
+    for (auto id : dxl_ids_all_) {
+      dxl_comm_result = packet_handler_->write4ByteTxRx(port_handler_, id, addr_profile_acc_, 0, &dxl_error);
+      dxl_comm_result = packet_handler_->write4ByteTxRx(port_handler_, id, addr_profile_vel_, 0, &dxl_error);
+    }
+  } else if (profile_ == "Rectangle") {
+    for (auto id : dxl_ids_all_) {
+      dxl_comm_result = packet_handler_->write4ByteTxRx(port_handler_, id, addr_profile_acc_, profile_velocity_, &dxl_error);
+      dxl_comm_result = packet_handler_->write4ByteTxRx(port_handler_, id, addr_profile_vel_, 0, &dxl_error);
+    }
+  } else if (profile_ == "Trapezoidal") {
+    for (auto id : dxl_ids_all_) {
+      dxl_comm_result = packet_handler_->write4ByteTxRx(port_handler_, id, addr_profile_acc_, profile_acceleration_, &dxl_error);
+      dxl_comm_result = packet_handler_->write4ByteTxRx(port_handler_, id, addr_profile_vel_, profile_velocity_, &dxl_error);
+    }
+  }else {
+    RCLCPP_WARN(logger_, "Unknown profile type: %s", profile_.c_str());
+  }
+
+  // torque on 
+  for (auto id : dxl_ids_all_) {
+    dxl_comm_result = packet_handler_->write1ByteTxRx(port_handler_, id, addr_torque_enable_, torque_enable_value_, &dxl_error);
+    if (dxl_comm_result != COMM_SUCCESS) {
+      RCLCPP_WARN(logger_, "Torque ON failed (ID=%d): %s",id, packet_handler_->getTxRxResult(dxl_comm_result));
+    } else if (dxl_error != 0) {
+      RCLCPP_WARN(logger_, "Torque ON error (ID=%d): %s", id, packet_handler_->getRxPacketError(dxl_error));
     }
   }
 }
@@ -101,7 +138,7 @@ void DynamixelSdkInterface::initBulkRead()
 
   for (auto id : dxl_ids_all_) {
     bool ok = true;
-    ok &= group_bulk_read_->addParam(id, addr_present_current_,  len_present_all_);
+    ok &= group_bulk_read_->addParam(id, addr_present_load_,  len_present_all_);
     if (!ok) {
       RCLCPP_WARN(logger_, "GroupBulkRead addParam failed (ID=%d)", id);
     }
@@ -111,7 +148,7 @@ void DynamixelSdkInterface::initBulkRead()
               dxl_ids_all_.size());
 }
 
-bool DynamixelSdkInterface::readOnce(State &out_state)
+bool DynamixelSdkInterface::readOnce(States &out_states)
 {
   if (!group_bulk_read_) {
     RCLCPP_ERROR(logger_, "GroupBulkRead not initialized");
@@ -126,19 +163,30 @@ bool DynamixelSdkInterface::readOnce(State &out_state)
   }
 
   const std::size_t n = dxl_ids_all_.size();
-  out_state.position.assign(n, 0);
-  out_state.velocity.assign(n, 0);
-  out_state.current.assign(n, 0);
+  out_states.goal_positions.assign(n, 0);
+  out_states.positions.assign(n, 0);
+  out_states.velocities.assign(n, 0);
+  out_states.loads.assign(n, 0);
 
   for (std::size_t i = 0; i < n; ++i) {
     auto id = dxl_ids_all_[i];
+
+    // goal position (uint32 → int32)
+    if (group_bulk_read_->isAvailable(
+            id, addr_goal_position_, len_goal_position_)) {
+      uint32_t raw = group_bulk_read_->getData(
+          id, addr_goal_position_, len_goal_position_);
+      out_states.goal_positions[i] = static_cast<int32_t>(raw);
+    } else {
+      RCLCPP_WARN(logger_, "GoalPosition not available (ID=%d)", id);
+    }
 
     // position (uint32 → int32)
     if (group_bulk_read_->isAvailable(
             id, addr_present_position_, len_present_position_)) {
       uint32_t raw = group_bulk_read_->getData(
           id, addr_present_position_, len_present_position_);
-      out_state.position[i] = static_cast<int32_t>(raw);
+      out_states.positions[i] = static_cast<int32_t>(raw);
     } else {
       RCLCPP_WARN(logger_, "Position not available (ID=%d)", id);
     }
@@ -148,20 +196,20 @@ bool DynamixelSdkInterface::readOnce(State &out_state)
             id, addr_present_velocity_, len_present_velocity_)) {
       uint32_t raw = group_bulk_read_->getData(
           id, addr_present_velocity_, len_present_velocity_);
-      out_state.velocity[i] = static_cast<int32_t>(raw);
+      out_states.velocities[i] = static_cast<int32_t>(raw);
     } else {
       RCLCPP_WARN(logger_, "Velocity not available (ID=%d)", id);
     }
 
-    // current (uint32 → uint16 → int16)
+    // load (uint32 → uint16 → int16)
     if (group_bulk_read_->isAvailable(
-            id, addr_present_current_, len_present_current_)) {
+            id, addr_present_load_, len_present_load_)) {
       uint32_t raw  = group_bulk_read_->getData(
-          id, addr_present_current_, len_present_current_);
+          id, addr_present_load_, len_present_load_);
       uint16_t raw16 = static_cast<uint16_t>(raw);
-      out_state.current[i] = static_cast<int16_t>(raw16);
+      out_states.loads[i] = static_cast<int16_t>(raw16);
     } else {
-      RCLCPP_WARN(logger_, "Current not available (ID=%d)", id);
+      RCLCPP_WARN(logger_, "Load not available (ID=%d)", id);
     }
   }
 

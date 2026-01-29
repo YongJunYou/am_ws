@@ -3,5 +3,13 @@
     port: "/dev/ttyUSB0"
     baudrate: 1000000
     protocol_version: 2.0
-    dxl_ids: [1, 2, 3, 4, 5]
-    control_mode: 3 # Position Mode
+    dxl_ids: [1, 2]
+    operating_mode: 3 # Position Mode
+    profile: "Step" # Rectangle # Trapezoidal
+    profile_velocity: 100     # 100 * 0.229   = 22.9 [rev/min]	      or  0 [rev/min]
+    profile_acceleration: 10  # 10 * 214.577  = 2145.77 [rev/min^2]   or  0 [rev/min^2]
+    start_and_end_position: [2048.0, 1948.0]
+    decrement_per_second: 2.0
+
+
+    
